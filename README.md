@@ -118,7 +118,7 @@ Please refer to the official [MariaDB Operator Docs](https://github.com/mariadb-
 First, add the KubePress Helm repository:
 
 ```bash
-helm repo add kubepress https://hostzero-gmbh.github.io/KubePress/
+helm repo add kubepress https://kubepress.org
 ```
 
 
