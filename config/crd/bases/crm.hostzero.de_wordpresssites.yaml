@@ -84,6 +84,12 @@ spec:
               ingress:
                 description: Optional Ingress configuration
                 properties:
+                  disabled:
+                    default: false
+                    description: |-
+                      Disable automatic ingress creation
+                      When set to true, no ingress resource will be created
+                    type: boolean
                   host:
                     description: Hostname for the WordPress site
                     minLength: 1

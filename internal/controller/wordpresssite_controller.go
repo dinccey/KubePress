@@ -376,11 +376,19 @@ func (r *WordPressSiteReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Finally, reconcile the Ingress
-	if err := wordpress.ReconcileIngress(ctx, r.Client, r.Scheme, wp); err != nil {
-		logger.Error(err, "Failed to reconcile Ingress")
-		// Don't requeue immediately for Ingress errors to avoid constant loop
-		return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+	// Finally, reconcile the Ingress (only if not disabled)
+	if wp.Spec.Ingress != nil && !wp.Spec.Ingress.Disabled {
+		if err := wordpress.ReconcileIngress(ctx, r.Client, r.Scheme, wp); err != nil {
+			logger.Error(err, "Failed to reconcile Ingress")
+			// Don't requeue immediately for Ingress errors to avoid constant loop
+			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		}
+	} else if wp.Spec.Ingress != nil && wp.Spec.Ingress.Disabled {
+		// If ingress is disabled, delete existing ingress if it exists
+		if err := wordpress.DeleteIngress(ctx, r.Client, wp); err != nil {
+			logger.Error(err, "Failed to delete Ingress")
+			return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+		}
 	}
 
 	// Update status

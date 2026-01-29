@@ -344,3 +344,30 @@ func mapsEqual(a, b map[string]string) bool {
 
 	return true
 }
+
+// DeleteIngress deletes the Ingress resource if it exists
+func DeleteIngress(ctx context.Context, r client.Client, wp *crmv1.WordPressSite) error {
+	logger := log.FromContext(ctx).WithValues("component", "ingress")
+	ingressName := GetResourceName(wp.Name)
+
+	ingress := &networkingv1.Ingress{}
+	err := r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: wp.Namespace}, ingress)
+
+	if errors.IsNotFound(err) {
+		// Ingress doesn't exist, nothing to delete
+		logger.V(1).Info("Ingress not found, nothing to delete", "name", ingressName)
+		return nil
+	} else if err != nil {
+		logger.Error(err, "Failed to get Ingress for deletion")
+		return fmt.Errorf("failed to get ingress for deletion: %w", err)
+	}
+
+	// Delete the ingress
+	if err := r.Delete(ctx, ingress); err != nil {
+		logger.Error(err, "Failed to delete Ingress")
+		return fmt.Errorf("failed to delete ingress: %w", err)
+	}
+
+	logger.Info("Successfully deleted Ingress", "name", ingressName)
+	return nil
+}

@@ -119,6 +119,12 @@ type IngressConfig struct {
 	// +kubebuilder:default=false
 	// +optional
 	TLS bool `json:"tls,omitempty"`
+
+	// Disable automatic ingress creation
+	// When set to true, no ingress resource will be created
+	// +kubebuilder:default=false
+	// +optional
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // WordPressSiteStatus defines the observed state of WordPressSite

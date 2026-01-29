@@ -96,4 +96,30 @@ spec:
     storageSize: 10Gi
 ```
 
+### Disabling Automatic Ingress Creation
+
+By default, KubePress automatically creates an Ingress resource for your WordPress site. However, you can disable this behavior if you want to manage the Ingress manually or use a different ingress configuration.
+
+To disable automatic ingress creation, set the `ingress.disabled` field to `true`:
+
+```yaml
+apiVersion: crm.hostzero.de/v1
+kind: WordPressSite
+metadata:
+  name: wordpress-no-ingress
+spec:
+  # ... other fields ...
+  ingress:
+    host: example.com
+    tls: false
+    disabled: true  # This prevents automatic ingress creation
+```
+
+When `ingress.disabled` is set to `true`:
+- No Ingress resource will be created by the operator
+- If an Ingress was previously created by the operator, it will be deleted
+- You can manually create your own Ingress resource or use an alternative ingress solution
+
+**Note:** Even when ingress is disabled, you still need to provide the `ingress.host` field as it may be used for other purposes within the operator.
+
 For more information about the fields in the WordPress Custom Resource, please look directly at the [wordpresssite_types.go](../api/v1/wordpresssite_types.go) file in the `api/v1` directory.
