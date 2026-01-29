@@ -4,6 +4,8 @@ controllerManager:
   container:
     image:
       repository: ghcr.io/hostzero-gmbh/kubepress/controller
+      tag: ""  # If empty, defaults to Chart.AppVersion
+      pullPolicy: IfNotPresent  # Options: Always, Never, IfNotPresent
     args:
       - "--leader-elect"
       - "--metrics-bind-address=:8443"
