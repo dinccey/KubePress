@@ -19,7 +19,7 @@ import (
 )
 
 // ReconcilePHPMyAdmin ensures a single, global phpMyAdmin Deployment/Service/Ingress
-// exists. Minimal, robust implementation to fix prior file corruption.
+// exists. Minimal, robust implementation.
 func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPressSite) error {
 	logger := log.FromContext(ctx).WithValues("component", "phpmyadmin")
 
@@ -29,7 +29,7 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 		return nil
 	}
 
-	// If site requests disabling phpMyAdmin, delete the global Ingress in targetNS
+	// If site requests disabling phpMyAdmin, delete the global Ingress
 	if wp.Spec.DisablePhpMyAdmin {
 		logger.Info("Site requests phpMyAdmin disabled; deleting global ingress", "site", wp.Name)
 		targetNS := os.Getenv("PHPMYADMIN_NAMESPACE")
@@ -50,15 +50,13 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 		return nil
 	}
 
-	// Determine target namespace for the global phpMyAdmin resources. If not
-	// provided via env, default to the namespace of the reconciled WordPressSite.
+	// Determine target namespace for the global phpMyAdmin resources.
 	targetNS := os.Getenv("PHPMYADMIN_NAMESPACE")
 	if targetNS == "" {
 		targetNS = wp.Namespace
 	}
 
-	// Determine which MariaDB namespace to point phpMyAdmin at. If not set,
-	// assume the MariaDB cluster lives in the same namespace as the site.
+	// Determine MariaDB namespace for PMA_HOST.
 	mariadbNS := os.Getenv("PHPMYADMIN_MARIADB_NAMESPACE")
 	if mariadbNS == "" {
 		mariadbNS = wp.Namespace
@@ -66,20 +64,24 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 
 	logger = logger.WithValues("phpmyadmin-namespace", targetNS, "mariadb-namespace", mariadbNS)
 
-	// Prepare common metadata
 	deploymentName := "phpmyadmin"
 	serviceName := "phpmyadmin"
 	ingressName := "phpmyadmin"
 
-	// Ensure Deployment exists in the target namespace
+	// Ensure Deployment
 	deployment := &appsv1.Deployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: targetNS}, deployment); err != nil {
 		if kerrors.IsNotFound(err) {
-			// Create a new Deployment for the shared phpMyAdmin instance
-			envVars := []corev1.EnvVar{{Name: "PMA_HOST", Value: fmt.Sprintf("%s.%s.svc.cluster.local", MariaDBClusterName, mariadbNS)}}
+			envVars := []corev1.EnvVar{
+				{Name: "PMA_HOST", Value: fmt.Sprintf("%s.%s.svc.cluster.local", MariaDBClusterName, mariadbNS)},
+			}
 
 			replicas := int32(1)
-			labels := map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator", "app.kubernetes.io/part-of": "kubepress", "app.kubernetes.io/name": "phpmyadmin-server"}
+			labels := map[string]string{
+				"app.kubernetes.io/managed-by": "kubepress-operator",
+				"app.kubernetes.io/part-of":    "kubepress",
+				"app.kubernetes.io/name":       "phpmyadmin-server",
+			}
 
 			image := os.Getenv("PHPMYADMIN_IMAGE")
 			if image == "" {
@@ -87,11 +89,29 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 			}
 
 			deployment = &appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: targetNS, Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      deploymentName,
+					Namespace: targetNS,
+					Labels:    labels,
+				},
 				Spec: appsv1.DeploymentSpec{
 					Replicas: &replicas,
 					Selector: &metav1.LabelSelector{MatchLabels: labels},
-					Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: labels}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "phpmyadmin", Image: image, Env: envVars, Ports: []corev1.ContainerPort{{Name: "apache", ContainerPort: 80}}}}}},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{Labels: labels},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "phpmyadmin",
+									Image: image,
+									Env:   envVars,
+									Ports: []corev1.ContainerPort{
+										{Name: "apache", ContainerPort: 80},
+									},
+								},
+							},
+						},
+					},
 				},
 			}
 
@@ -106,11 +126,28 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 		}
 	}
 
-	// Ensure Service exists
+	// Ensure Service
 	svc := &corev1.Service{}
 	if err := r.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: targetNS}, svc); err != nil {
 		if kerrors.IsNotFound(err) {
-			svc = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: targetNS, Labels: map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator", "app.kubernetes.io/part-of": "kubepress", "app.kubernetes.io/name": "phpmyadmin-service"}}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app.kubernetes.io/name": "phpmyadmin-server"}, Ports: []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(80)}}, Type: corev1.ServiceTypeClusterIP}}
+			svc = &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      serviceName,
+					Namespace: targetNS,
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "kubepress-operator",
+						"app.kubernetes.io/part-of":    "kubepress",
+						"app.kubernetes.io/name":       "phpmyadmin-service",
+					},
+				},
+				Spec: corev1.ServiceSpec{
+					Selector: map[string]string{"app.kubernetes.io/name": "phpmyadmin-server"},
+					Ports: []corev1.ServicePort{
+						{Port: 80, TargetPort: intstr.FromInt(80)},
+					},
+					Type: corev1.ServiceTypeClusterIP,
+				},
+			}
 
 			if err := r.Create(ctx, svc); err != nil {
 				logger.Error(err, "Failed to create phpMyAdmin service")
@@ -123,40 +160,86 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 		}
 	}
 
-	// Ensure Ingress exists using the global domain from env
+	// Ensure Ingress
 	ing := &networkingv1.Ingress{}
 	if err := r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: targetNS}, ing); err != nil {
 		if kerrors.IsNotFound(err) {
 			host := os.Getenv("PHPMYADMIN_DOMAIN")
-			ingressClass := os.Getenv("PHPMYADMIN_INGRESS_CLASS") // optional override
+			if host == "" {
+				logger.Info("PHPMYADMIN_DOMAIN not set; skipping Ingress creation")
+				return nil
+			}
+
+			ingressClass := os.Getenv("PHPMYADMIN_INGRESS_CLASS")
 			annotations := map[string]string{}
-			// default nginx annotations only when class explicitly nginx
+
 			if ingressClass == "nginx" {
 				annotations["nginx.ingress.kubernetes.io/proxy-body-size"] = "32M"
 				annotations["nginx.ingress.kubernetes.io/proxy-read-timeout"] = "100"
 				annotations["nginx.ingress.kubernetes.io/proxy-send-timeout"] = "100"
 			}
-			// allow cluster-wide TLS issuer
 			if issuer := os.Getenv("TLS_CLUSTER_ISSUER"); issuer != "" {
 				annotations["cert-manager.io/cluster-issuer"] = issuer
 			}
 
-			ing = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: ingressName, Namespace: targetNS, Labels: map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator", "app.kubernetes.io/part-of": "kubepress", "app.kubernetes.io/name": "phpmyadmin-ingress"}, Annotations: annotations}, Spec: networkingv1.IngressSpec{Rules: []networkingv1.IngressRule{{Host: host, IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/", PathType: func() *networkingv1.PathType { pt := networkingv1.PathTypePrefix; return &pt }(), Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: serviceName, Port: networkingv1.ServiceBackendPort{Number: 80}}}}}}}}}}
+			pathType := networkingv1.PathTypePrefix
+
+			ing = &networkingv1.Ingress{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        ingressName,
+					Namespace:   targetNS,
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "kubepress-operator",
+						"app.kubernetes.io/part-of":    "kubepress",
+						"app.kubernetes.io/name":       "phpmyadmin-ingress",
+					},
+					Annotations: annotations,
+				},
+				Spec: networkingv1.IngressSpec{
+					Rules: []networkingv1.IngressRule{
+						{
+							Host: host,
+							IngressRuleValue: networkingv1.IngressRuleValue{
+								HTTP: &networkingv1.HTTPIngressRuleValue{
+									Paths: []networkingv1.HTTPIngressPath{
+										{
+											Path:     "/",
+											PathType: &pathType,
+											Backend: networkingv1.IngressBackend{
+												Service: &networkingv1.IngressServiceBackend{
+													Name: serviceName,
+													Port: networkingv1.ServiceBackendPort{
+														Number: 80,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
 
 			if ingressClass != "" {
 				ing.Spec.IngressClassName = &ingressClass
 			}
 
-			// Configure TLS using consistent secret name
 			if os.Getenv("TLS_CLUSTER_ISSUER") != "" || os.Getenv("PHPMYADMIN_TLS") == "true" {
-				ing.Spec.TLS = []networkingv1.IngressTLS{{Hosts: []string{os.Getenv("PHPMYADMIN_DOMAIN")}, SecretName: GetTLSSecretName("phpmyadmin")}}
+				ing.Spec.TLS = []networkingv1.IngressTLS{
+					{
+						Hosts:      []string{host},
+						SecretName: GetTLSSecretName("phpmyadmin"),
+					},
+				}
 			}
 
 			if err := r.Create(ctx, ing); err != nil {
 				logger.Error(err, "Failed to create phpMyAdmin ingress")
 				return fmt.Errorf("failed to create phpMyAdmin ingress: %w", err)
 			}
-			logger.Info("Created phpMyAdmin Ingress", "name", ingressName, "namespace", targetNS)
+			logger.Info("Created phpMyAdmin Ingress", "name", ingressName, "namespace", targetNS, "host", host)
 		} else {
 			logger.Error(err, "Failed to get phpMyAdmin Ingress")
 			return fmt.Errorf("failed to get phpMyAdmin ingress: %w", err)
@@ -181,17 +264,18 @@ func DeletePHPMyAdmin(ctx context.Context, r client.Client) error {
 		return nil
 	}
 
-	// best-effort deletes
-	for _, obj := range []client.Object{
+	objects := []client.Object{
 		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "phpmyadmin", Namespace: targetNS}},
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "phpmyadmin", Namespace: targetNS}},
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "phpmyadmin", Namespace: targetNS}},
-	} {
+	}
+
+	for _, obj := range objects {
 		if err := r.Delete(ctx, obj); err != nil && !kerrors.IsNotFound(err) {
-			logger.Error(err, "Failed to delete", "object", obj.GetObjectKind().GroupVersionKind())
+			logger.Error(err, "Failed to delete phpMyAdmin resource", "kind", obj.GetObjectKind().GroupVersionKind())
 		}
 	}
 
-	logger.Info("requested deletion of global phpMyAdmin resources", "namespace", targetNS)
+	logger.Info("Requested deletion of global phpMyAdmin resources", "namespace", targetNS)
 	return nil
 }
