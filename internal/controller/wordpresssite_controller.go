@@ -363,17 +363,11 @@ func (r *WordPressSiteReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Ensure PHPMyAdmin is reconciled or deleted based on disablePhpMyAdmin
-	if wp.Spec.DisablePhpMyAdmin {
-		if err := wordpress.DeletePHPMyAdmin(ctx, r.Client, wp); err != nil {
-			logger.Error(err, "Failed to delete PhpMyAdmin resources")
-			return ctrl.Result{}, err
-		}
-	} else {
-		if err := wordpress.ReconcilePHPMyAdmin(ctx, r.Client, wp); err != nil {
-			logger.Error(err, "Failed to reconcile PhpMyAdmin Deployment")
-			return ctrl.Result{}, err
-		}
+	// Ensure a global PHPMyAdmin exists if enabled. Global lifecycle is controlled
+	// by controller env vars; do not create/delete per-site resources here.
+	if err := wordpress.ReconcilePHPMyAdmin(ctx, r.Client, wp); err != nil {
+		logger.Error(err, "Failed to reconcile global PhpMyAdmin")
+		return ctrl.Result{}, err
 	}
 
 	// Fifth, reconcile the Service

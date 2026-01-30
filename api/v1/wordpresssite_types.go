@@ -42,11 +42,6 @@ type WordPressSiteSpec struct {
 	// +kubebuilder:default=false
 	// +optional
 	DisablePhpMyAdmin bool `json:"disablePhpMyAdmin,omitempty"`
-
-	// phpMyAdmin ingress configuration
-	// Allows customizing the phpMyAdmin ingress host, TLS, ingress class and annotations
-	// +optional
-	PhpMyAdminIngress *IngressConfig `json:"phpMyAdminIngress,omitempty"`
 }
 
 // DatabaseConfig defines the MySQL database configuration
