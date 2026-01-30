@@ -1,6 +1,6 @@
-## 0.3.0 - 2026-01-30
+-## 0.3.1 - 2026-01-30
 
-- Bumped Helm chart to `0.3.0`.
+- Bumped Helm chart to `0.3.1`.
 - Updated CRD schema and chart features (ingress annotations, ingressClassName, phpMyAdmin toggle).
 - Miscellaneous chart improvements.
 
