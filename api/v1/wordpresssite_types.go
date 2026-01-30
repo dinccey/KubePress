@@ -36,7 +36,7 @@ type WordPressSiteSpec struct {
 	// Ingress configuration
 	// +kubebuilder:validation:Required
 	Ingress *IngressConfig `json:"ingress,omitempty"`
- 
+
 	// Disable automatic phpMyAdmin deployment
 	// When set to true, no phpMyAdmin resource will be created for this site
 	// +kubebuilder:default=false

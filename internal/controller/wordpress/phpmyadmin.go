@@ -186,8 +186,8 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 
 			ing = &networkingv1.Ingress{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        ingressName,
-					Namespace:   targetNS,
+					Name:      ingressName,
+					Namespace: targetNS,
 					Labels: map[string]string{
 						"app.kubernetes.io/managed-by": "kubepress-operator",
 						"app.kubernetes.io/part-of":    "kubepress",
