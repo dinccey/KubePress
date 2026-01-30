@@ -244,7 +244,7 @@ func ReconcileSFTPDeployment(ctx context.Context, r client.Client, scheme *runti
 			},
 			Spec: corev1.ServiceSpec{
 				Type:     corev1.ServiceTypeLoadBalancer,
-				Selector: GetSFTPLabels(wp),
+				Selector: GetSFTPLabelsForMatching(wp),
 				Ports: []corev1.ServicePort{{
 					Name:       "sftp",
 					Port:       int32(port),

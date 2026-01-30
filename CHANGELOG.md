@@ -1,3 +1,10 @@
+## 0.3.4 - 2026-01-30
+
+- Fixed critical service selector mismatch causing "No available server" errors with Traefik and other ingress controllers
+- Service selectors now use `GetWordpressLabelsForMatching()` and `GetSFTPLabelsForMatching()` to match deployment pod labels
+- Removed redundant `DisableTLS` field from IngressConfig, simplified TLS configuration
+- Bumped chart/app version to `0.3.4`.
+
 ## 0.3.2 - 2026-01-30
 
 - Added phpMyAdmin ingress configuration and bumped to `0.3.2`.

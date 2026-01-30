@@ -38,7 +38,7 @@ func ReconcileService(ctx context.Context, r client.Client, scheme *runtime.Sche
 
 	// Create or update the Service
 	_, err := ctrl.CreateOrUpdate(ctx, r, service, func() error {
-		service.Spec.Selector = GetWordpressLabels(wp)
+		service.Spec.Selector = GetWordpressLabelsForMatching(wp)
 		service.Spec.Ports = []corev1.ServicePort{
 			// Internal routing with http (Ingress should terminate TLS)
 			// and forward to the WordPress container
