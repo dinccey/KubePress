@@ -173,7 +173,7 @@ func updateExistingIngress(ctx context.Context, r client.Client, wp *crmv1.WordP
 	// Update ingressClassName if a desired class is specified in the CR.
 	// If the CR does not specify a class, leave the existing ingress class
 	// untouched so we don't overwrite cluster/controller defaults.
-	desiredClass := ""
+	// `desiredClass` was computed earlier; reuse it and update only when spec provides a value.
 	if wp.Spec.Ingress != nil && wp.Spec.Ingress.IngressClassName != "" {
 		desiredClass = wp.Spec.Ingress.IngressClassName
 	}
