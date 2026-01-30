@@ -112,6 +112,12 @@ spec:
                 required:
                 - host
                 type: object
+              disablePhpMyAdmin:
+                default: false
+                description: |-
+                  Disable automatic phpMyAdmin deployment
+                  When set to true, no phpMyAdmin resource will be created for this site
+                type: boolean
               siteTitle:
                 description: |-
                   Site title for WordPress installation

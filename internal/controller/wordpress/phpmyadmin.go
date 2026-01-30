@@ -170,3 +170,44 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 
 	return nil
 }
+
+// DeletePHPMyAdmin deletes the phpMyAdmin Deployment, Service, and Ingress for a WordPress site if they exist
+func DeletePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPressSite) error {
+	logger := log.FromContext(ctx).WithValues("component", "phpmyadmin-delete", "site", wp.Name, "namespace", wp.Namespace)
+	var errs []error
+
+	// Delete Deployment
+	deployment := &appsv1.Deployment{}
+	deploymentName := "phpmyadmin"
+	if err := r.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: wp.Namespace}, deployment); err == nil {
+		if err := r.Delete(ctx, deployment); err != nil && !errors.IsNotFound(err) {
+			logger.Error(err, "Failed to delete PHPMyAdmin deployment")
+			errs = append(errs, err)
+		}
+	}
+
+	// Delete Service
+	service := &corev1.Service{}
+	serviceName := "phpmyadmin"
+	if err := r.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: wp.Namespace}, service); err == nil {
+		if err := r.Delete(ctx, service); err != nil && !errors.IsNotFound(err) {
+			logger.Error(err, "Failed to delete PHPMyAdmin service")
+			errs = append(errs, err)
+		}
+	}
+
+	// Delete Ingress
+	ingress := &networkingv1.Ingress{}
+	ingressName := "phpmyadmin"
+	if err := r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: wp.Namespace}, ingress); err == nil {
+		if err := r.Delete(ctx, ingress); err != nil && !errors.IsNotFound(err) {
+			logger.Error(err, "Failed to delete PHPMyAdmin ingress")
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("one or more errors occurred deleting phpMyAdmin resources")
+	}
+	return nil
+}

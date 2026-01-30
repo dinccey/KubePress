@@ -193,4 +193,25 @@ spec:
 
 **Note:** The default NGINX annotations for body size and timeout limits are always applied. Custom annotations are merged with these defaults and can override them if needed.
 
+### Disabling Automatic phpMyAdmin Deployment
+
+By default, KubePress automatically deploys a phpMyAdmin instance for each WordPress site. If you do not want phpMyAdmin to be deployed for a specific site, you can disable it by setting the `disablePhpMyAdmin` field to `true` in your WordPressSite spec:
+
+```yaml
+apiVersion: crm.hostzero.de/v1
+kind: WordPressSite
+metadata:
+  name: wordpress-no-phpmyadmin
+spec:
+  # ... other fields ...
+  disablePhpMyAdmin: true  # This prevents automatic phpMyAdmin deployment for this site
+  ingress:
+    host: example.com
+    tls: false
+```
+
+When `disablePhpMyAdmin` is set to `true`:
+- No phpMyAdmin Deployment or Service will be created for this WordPress site
+- You can still access the database using your own tools or a shared phpMyAdmin instance if available
+
 For more information about the fields in the WordPress Custom Resource, please look directly at the [wordpresssite_types.go](../api/v1/wordpresssite_types.go) file in the `api/v1` directory.
