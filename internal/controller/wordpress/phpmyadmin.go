@@ -19,78 +19,58 @@ import (
 )
 
 // ReconcilePHPMyAdmin ensures a single, global phpMyAdmin Deployment/Service/Ingress
-// exists. Configuration is driven by controller environment variables so that a
-// single domain (defined at chart install) can be used.
+// exists. Minimal, robust implementation to fix prior file corruption.
 func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPressSite) error {
 	logger := log.FromContext(ctx).WithValues("component", "phpmyadmin")
 
-	// Allow cluster operators to disable the global phpMyAdmin entirely
+	// Respect global enable flag
 	if strings.ToLower(os.Getenv("PHPMYADMIN_ENABLED")) == "false" {
 		logger.V(1).Info("Global phpMyAdmin disabled via PHPMYADMIN_ENABLED")
 		return nil
 	}
 
-	// target namespace for phpMyAdmin resources (env or fallback to site namespace)
+	// target namespace for global resources (env overrides site ns)
 	targetNS := os.Getenv("PHPMYADMIN_NAMESPACE")
 	if targetNS == "" {
 		targetNS = wp.Namespace
 	}
 
-	// namespace where the MariaDB cluster to connect to lives
-	mariadbNS := os.Getenv("PHPMYADMIN_MARIADB_NAMESPACE")
-	if mariadbNS == "" {
-		mariadbNS = wp.Namespace
-	}
-
-	logger = logger.WithValues("phpmyadmin-namespace", targetNS, "mariadb-namespace", mariadbNS)
-
-	// resource names
-	deploymentName := "phpmyadmin"
-	serviceName := "phpmyadmin"
-	ingressName := "phpmyadmin"
-
-	// If the WordPressSite explicitly disables phpMyAdmin, ensure the global
-	// phpMyAdmin Ingress is removed for this site's namespace (operator must
-	// still respect cluster-wide PHPMYADMIN_ENABLED). We only delete the
-	// Ingress here; Deployment/Service remain managed globally.
+	// If site requests disabling phpMyAdmin, delete the global Ingress in targetNS
 	if wp.Spec.DisablePhpMyAdmin {
-		logger.Info("WordPressSite requests phpMyAdmin disabled; ensuring ingress is deleted", "site", wp.Name)
+		logger.Info("Site requests phpMyAdmin disabled; deleting global ingress", "site", wp.Name)
 		ing := &networkingv1.Ingress{}
-		if err := r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: targetNS}, ing); err == nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, ing); err == nil {
 			if err := r.Delete(ctx, ing); err != nil {
 				logger.Error(err, "failed to delete phpMyAdmin ingress")
 				return err
 			}
 			logger.Info("deleted phpMyAdmin ingress", "namespace", targetNS)
 		} else if !kerrors.IsNotFound(err) {
-			logger.Error(err, "failed to query phpMyAdmin ingress for deletion")
+			logger.Error(err, "error checking phpMyAdmin ingress for deletion")
 			return err
 		}
-
-		// Nothing more to do for this site
 		return nil
 	}
 
-	// --- Deployment ---
+	// Ensure Deployment
 	dep := &appsv1.Deployment{}
-	if err := r.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: targetNS}, dep); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, dep); err != nil {
 		if !kerrors.IsNotFound(err) {
-			logger.Error(err, "failed to query phpMyAdmin deployment")
+			logger.Error(err, "failed to get phpMyAdmin deployment")
 			return err
 		}
 
-		// create deployment
-		envVars := []corev1.EnvVar{{Name: "PMA_HOST", Value: fmt.Sprintf("%s.%s.svc.cluster.local", MariaDBClusterName, mariadbNS)}}
+		// create minimal deployment
+		envVars := []corev1.EnvVar{{Name: "PMA_HOST", Value: fmt.Sprintf("%s.%s.svc.cluster.local", MariaDBClusterName, targetNS)}}
 		replicas := int32(1)
 		labels := map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator", "app.kubernetes.io/part-of": "kubepress", "app.kubernetes.io/name": "phpmyadmin-server"}
-
 		image := os.Getenv("PHPMYADMIN_IMAGE")
 		if image == "" {
 			image = "phpmyadmin:latest"
 		}
 
 		dep = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: deploymentName, Namespace: targetNS, Labels: labels},
+			ObjectMeta: metav1.ObjectMeta{Name: "phpmyadmin", Namespace: targetNS, Labels: labels},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: &replicas,
 				Selector: &metav1.LabelSelector{MatchLabels: labels},
@@ -102,34 +82,30 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 			logger.Error(err, "failed to create phpMyAdmin deployment")
 			return err
 		}
-		logger.Info("created phpMyAdmin Deployment", "namespace", targetNS)
+		logger.Info("created phpMyAdmin deployment", "namespace", targetNS)
 	}
 
-	// --- Service ---
+	// Ensure Service
 	svc := &corev1.Service{}
-	if err := r.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: targetNS}, svc); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, svc); err != nil {
 		if !kerrors.IsNotFound(err) {
-			logger.Error(err, "failed to query phpMyAdmin service")
+			logger.Error(err, "failed to get phpMyAdmin service")
 			return err
 		}
 
-		svc = &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: targetNS, Labels: map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator", "app.kubernetes.io/part-of": "kubepress", "app.kubernetes.io/name": "phpmyadmin-service"}},
-			Spec: corev1.ServiceSpec{Selector: map[string]string{"app.kubernetes.io/name": "phpmyadmin-server"}, Ports: []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(80)}}, Type: corev1.ServiceTypeClusterIP},
-		}
-
+		svc = &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "phpmyadmin", Namespace: targetNS, Labels: map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator"}}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app.kubernetes.io/name": "phpmyadmin-server"}, Ports: []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(80)}}, Type: corev1.ServiceTypeClusterIP}}
 		if err := r.Create(ctx, svc); err != nil {
 			logger.Error(err, "failed to create phpMyAdmin service")
 			return err
 		}
-		logger.Info("created phpMyAdmin Service", "namespace", targetNS)
+		logger.Info("created phpMyAdmin service", "namespace", targetNS)
 	}
 
-	// --- Ingress ---
+	// Ensure Ingress (minimal: host from env)
 	ing := &networkingv1.Ingress{}
-	if err := r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: targetNS}, ing); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, ing); err != nil {
 		if !kerrors.IsNotFound(err) {
-			logger.Error(err, "failed to query phpMyAdmin ingress")
+			logger.Error(err, "failed to get phpMyAdmin ingress")
 			return err
 		}
 
@@ -138,63 +114,57 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 		annotations := map[string]string{}
 		if ingressClass == "nginx" {
 			annotations["nginx.ingress.kubernetes.io/proxy-body-size"] = "32M"
-			annotations["nginx.ingress.kubernetes.io/proxy-read-timeout"] = "100"
-			annotations["nginx.ingress.kubernetes.io/proxy-send-timeout"] = "100"
 		}
 		if issuer := os.Getenv("TLS_CLUSTER_ISSUER"); issuer != "" {
 			annotations["cert-manager.io/cluster-issuer"] = issuer
 		}
 
-		ing = &networkingv1.Ingress{
-			ObjectMeta: metav1.ObjectMeta{Name: ingressName, Namespace: targetNS, Labels: map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator", "app.kubernetes.io/part-of": "kubepress", "app.kubernetes.io/name": "phpmyadmin-ingress"}, Annotations: annotations},
-			Spec: networkingv1.IngressSpec{Rules: []networkingv1.IngressRule{{Host: host, IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/", PathType: func() *networkingv1.PathType { pt := networkingv1.PathTypePrefix; return &pt }(), Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: serviceName, Port: networkingv1.ServiceBackendPort{Number: 80}}}}}}}}},
-		}
+		ing = &networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "phpmyadmin", Namespace: targetNS, Labels: map[string]string{"app.kubernetes.io/managed-by": "kubepress-operator"}, Annotations: annotations}, Spec: networkingv1.IngressSpec{Rules: []networkingv1.IngressRule{{Host: host, IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{Paths: []networkingv1.HTTPIngressPath{{Path: "/", PathType: func() *networkingv1.PathType { pt := networkingv1.PathTypePrefix; return &pt }(), Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{Name: "phpmyadmin", Port: networkingv1.ServiceBackendPort{Number: 80}}}}}}}}}}
 
 		if ingressClass != "" {
 			ing.Spec.IngressClassName = &ingressClass
 		}
 		if os.Getenv("TLS_CLUSTER_ISSUER") != "" || os.Getenv("PHPMYADMIN_TLS") == "true" {
-			ing.Spec.TLS = []networkingv1.IngressTLS{{Hosts: []string{os.Getenv("PHPMYADMIN_DOMAIN")}, SecretName: GetTLSSecretName("phpmyadmin")}}
+			ing.Spec.TLS = []networkingv1.IngressTLS{{Hosts: []string{host}, SecretName: GetTLSSecretName("phpmyadmin")}}
 		}
 
 		if err := r.Create(ctx, ing); err != nil {
 			logger.Error(err, "failed to create phpMyAdmin ingress")
 			return err
 		}
-		logger.Info("created phpMyAdmin Ingress", "namespace", targetNS)
+		logger.Info("created phpMyAdmin ingress", "namespace", targetNS)
 	}
 
 	return nil
 }
 
-// DeletePHPMyAdmin deletes the global phpMyAdmin resources if explicitly requested.
-// By default it is a no-op because global lifecycle should be managed via controller
-// env vars or the chart rather than individual WordPressSite CRs.
+// DeletePHPMyAdmin performs best-effort deletion of global phpMyAdmin resources
+// when PHPMYADMIN_ENABLED is explicitly set to "false".
 func DeletePHPMyAdmin(ctx context.Context, r client.Client) error {
 	logger := log.FromContext(ctx).WithValues("component", "phpmyadmin-delete")
 
-	if strings.ToLower(os.Getenv("PHPMYADMIN_ENABLED")) == "false" {
-		// Attempt deletion if disabled
-		targetNS := os.Getenv("PHPMYADMIN_NAMESPACE")
-		// if empty, nothing to do because deployment was created in site namespace previously
-		if targetNS == "" {
-			logger.V(1).Info("PHPMYADMIN_NAMESPACE not set; skipping global deletion")
-			return nil
-		}
-
-		// delete ingress, service, deployment (best-effort)
-		ing := &networkingv1.Ingress{}
-		_ = r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, ing)
-		_ = r.Delete(ctx, ing)
-		svc := &corev1.Service{}
-		_ = r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, svc)
-		_ = r.Delete(ctx, svc)
-		dep := &appsv1.Deployment{}
-		_ = r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, dep)
-		_ = r.Delete(ctx, dep)
-		logger.Info("requested deletion of global phpMyAdmin resources", "namespace", targetNS)
+	if strings.ToLower(os.Getenv("PHPMYADMIN_ENABLED")) != "false" {
+		return nil
 	}
 
+	targetNS := os.Getenv("PHPMYADMIN_NAMESPACE")
+	if targetNS == "" {
+		logger.V(1).Info("PHPMYADMIN_NAMESPACE not set; skipping deletion")
+		return nil
+	}
+
+	// best-effort deletes
+	ing := &networkingv1.Ingress{}
+	_ = r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, ing)
+	_ = r.Delete(ctx, ing)
+	svc := &corev1.Service{}
+	_ = r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, svc)
+	_ = r.Delete(ctx, svc)
+	dep := &appsv1.Deployment{}
+	_ = r.Get(ctx, types.NamespacedName{Name: "phpmyadmin", Namespace: targetNS}, dep)
+	_ = r.Delete(ctx, dep)
+
+	logger.Info("requested deletion of global phpMyAdmin resources", "namespace", targetNS)
 	return nil
 }
 package wordpress
