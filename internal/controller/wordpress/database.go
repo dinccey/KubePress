@@ -188,6 +188,18 @@ func ReconcileDatabase(ctx context.Context, r client.Client, scheme *runtime.Sch
 		return err
 	}
 
+	// Ensure the secret has the watch label for MariaDB password updates
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	if _, exists := secret.Labels["k8s.mariadb.com/watch"]; !exists {
+		secret.Labels["k8s.mariadb.com/watch"] = ""
+		if err := r.Update(ctx, secret); err != nil {
+			logger.Error(err, "Failed to add watch label to WP secret")
+			return err
+		}
+	}
+
 	// check whether we have a databasePassword key in the secret
 	if _, exists := secret.Data["databasePassword"]; !exists {
 		// Update the secret with the database password
@@ -196,6 +208,12 @@ func ReconcileDatabase(ctx context.Context, r client.Client, scheme *runtime.Sch
 		}
 
 		secret.Data["databasePassword"] = secret.Data["password"]
+
+		// Add watch label to enable password updates
+		if secret.Labels == nil {
+			secret.Labels = make(map[string]string)
+		}
+		secret.Labels["k8s.mariadb.com/watch"] = ""
 
 		if err := r.Update(ctx, secret); err != nil {
 			logger.Error(err, "Failed to update WP secret with database password")
@@ -265,6 +283,12 @@ func ReconcileDatabase(ctx context.Context, r client.Client, scheme *runtime.Sch
 		secret.Data["database"] = []byte(dbResourceName)
 		secret.Data["databaseHost"] = []byte(fmt.Sprintf("%s.%s.svc.cluster.local", MariaDBClusterName, wp.Namespace))
 
+		// Add watch label to enable password updates
+		if secret.Labels == nil {
+			secret.Labels = make(map[string]string)
+		}
+		secret.Labels["k8s.mariadb.com/watch"] = ""
+
 		if err := r.Update(ctx, secret); err != nil {
 			logger.Error(err, "Failed to update WP secret with database username")
 			return err
@@ -305,6 +329,12 @@ func ReconcileDatabase(ctx context.Context, r client.Client, scheme *runtime.Sch
 		secret.Data["databaseUsername"] = []byte(databaseUsername)
 		secret.Data["database"] = []byte(dbResourceName)
 		secret.Data["databaseHost"] = []byte(fmt.Sprintf("%s.%s.svc.cluster.local", MariaDBClusterName, wp.Namespace))
+
+		// Add watch label to enable password updates
+		if secret.Labels == nil {
+			secret.Labels = make(map[string]string)
+		}
+		secret.Labels["k8s.mariadb.com/watch"] = ""
 
 		if err := r.Update(ctx, secret); err != nil {
 			logger.Error(err, "Failed to update WP secret with database username")

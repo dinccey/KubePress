@@ -59,7 +59,7 @@ This data will be used to create:
 After the initial creation of the WordPress instance, an update of username/password in the secret will not update:
 - the Admin user in WordPress
 - the password in the Database
-    - However, you can set a label to the secret, and the MariaDB operator will pick up the change and update the password in the database. According to the [MariaDB Operator documentation](https://github.com/mariadb-operator/mariadb-operator/blob/main/docs/api_reference.md#userspec), you can set the label `k8s.mariadb.com/watch` on the secret, and the operator will watch for changes.
+    - However, the KubePress operator automatically adds the `k8s.mariadb.com/watch` label to the secret, so the MariaDB operator will watch for changes and update the database password when the secret is modified. According to the [MariaDB Operator documentation](https://github.com/mariadb-operator/mariadb-operator/blob/main/docs/api_reference.md#userspec), the label `k8s.mariadb.com/watch` enables the operator to watch for changes.
 
 The newly updated credentials will be used in the deployment after a restart of the pods.
 
@@ -198,6 +198,8 @@ When phpMyAdmin is enabled (which is the default), you can access it at the conf
 2. Select your WordPress database from the left sidebar to manage tables, run queries, etc.
 
 **Note**: phpMyAdmin is configured to connect to the MariaDB cluster automatically. The login credentials are the database user credentials created for your WordPress site.
+
+**Troubleshooting Database Access**: If you encounter "Access denied" errors when logging into phpMyAdmin, this may be due to a password mismatch between the secret and the database. The KubePress operator automatically enables password synchronization, but for existing installations, you may need to update the password in the secret to trigger synchronization. Simply change the `password` field in the secret to a new value (the operator will update `databasePassword` accordingly), and the MariaDB operator will update the database user password.
 
 ### Disabling Automatic phpMyAdmin Deployment
 

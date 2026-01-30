@@ -1,3 +1,9 @@
+## 0.3.5 - 2026-01-30
+
+- Added automatic `k8s.mariadb.com/watch` label to database secrets for password synchronization
+- Updated documentation with troubleshooting steps for phpMyAdmin access issues
+- Bumped chart/app version to `0.3.5`.
+
 ## 0.3.4 - 2026-01-30
 
 - Fixed critical service selector mismatch causing "No available server" errors with Traefik and other ingress controllers
