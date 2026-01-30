@@ -22,6 +22,20 @@ jobs:
         run: |
           echo "REPO=${GITHUB_REPOSITORY@L}" >>${GITHUB_ENV}
 
+      - name: Extract Chart version
+        run: |
+          if [ ! -f dist/chart/Chart.yaml ]; then
+            echo "Chart.yaml not found" >&2
+            exit 1
+          fi
+          VERSION_LINE=$(grep '^version:' dist/chart/Chart.yaml || true)
+          if [ -z "$VERSION_LINE" ]; then
+            echo "version not found in Chart.yaml" >&2
+            exit 1
+          fi
+          VERSION=$(echo "$VERSION_LINE" | awk '{print $2}')
+          echo "CHART_VERSION=$VERSION" >>${GITHUB_ENV}
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -54,6 +68,8 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ghcr.io/${{ env.REPO }}/controller:${{ env.CHART_VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
 
