@@ -56,6 +56,8 @@ EOF
 ```
 
 After that, you can create the WordPress Custom Resource as shown below.
+NOTE: use the Wordpress Apache image from [Dockerhub](https://hub.docker.com/_/wordpress). 
+Also use a storage class that supports ReadWriteMany mode. local-path does not typically support that.
 
 ```bash
 kubectl apply -f - <<EOF
