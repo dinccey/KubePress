@@ -53,13 +53,13 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 	// Determine target namespace for the global phpMyAdmin resources.
 	targetNS := os.Getenv("PHPMYADMIN_NAMESPACE")
 	if targetNS == "" {
-		targetNS = wp.Namespace
+		targetNS = "kubepress"
 	}
 
 	// Determine MariaDB namespace for PMA_HOST.
 	mariadbNS := os.Getenv("PHPMYADMIN_MARIADB_NAMESPACE")
 	if mariadbNS == "" {
-		mariadbNS = wp.Namespace
+		mariadbNS = "kubepress"
 	}
 
 	logger = logger.WithValues("phpmyadmin-namespace", targetNS, "mariadb-namespace", mariadbNS)

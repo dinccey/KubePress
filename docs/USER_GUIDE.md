@@ -214,4 +214,19 @@ When `disablePhpMyAdmin` is set to `true`:
 - No phpMyAdmin Deployment or Service will be created for this WordPress site
 - You can still access the database using your own tools or a shared phpMyAdmin instance if available
 
+**Global phpMyAdmin Configuration (Environment Variables)**
+
+- The operator manages a single, global phpMyAdmin instance per target namespace. The behavior and placement of that instance can be controlled using the following environment variables set for the operator process (for example in the deployment or Helm chart `values.yaml`):
+
+- `PHPMYADMIN_ENABLED` : if set to `false` (case-insensitive) the operator will skip creating phpMyAdmin. When explicitly `false`, the operator's `DeletePHPMyAdmin` routine will perform a best-effort deletion of the global phpMyAdmin resources in `PHPMYADMIN_NAMESPACE`.
+- `PHPMYADMIN_NAMESPACE` : target namespace to create the global phpMyAdmin `Deployment`, `Service` and `Ingress`. If unset, the operator uses the `kubepress` namespace as the default.
+- `PHPMYADMIN_MARIADB_NAMESPACE` : namespace hosting the MariaDB cluster used by phpMyAdmin. Defaults to the `kubepress` namespace if unset.
+- `PHPMYADMIN_IMAGE` : container image for phpMyAdmin. Default: `phpmyadmin:latest`.
+- `PHPMYADMIN_DOMAIN` : hostname for the phpMyAdmin `Ingress`. If empty, ingress creation is skipped.
+- `PHPMYADMIN_INGRESS_CLASS` : optional `IngressClassName` to set on the phpMyAdmin ingress. If set to `nginx`, a set of common nginx-specific annotations (proxy body size, timeouts) are added.
+- `PHPMYADMIN_TLS` : if set to `true` (string) the operator will add a TLS entry to the phpMyAdmin Ingress and use the secret returned by `GetTLSSecretName("phpmyadmin")`.
+- `TLS_CLUSTER_ISSUER` : if set, the operator adds the `cert-manager.io/cluster-issuer` annotation to the Ingress and will enable TLS for the host.
+
+Examples for deploying the operator with the phpMyAdmin domain set are present in `local-values.yaml` and `dist/chart/values.yaml` (see `PHPMYADMIN_DOMAIN`).
+
 For more information about the fields in the WordPress Custom Resource, please look directly at the [wordpresssite_types.go](../api/v1/wordpresssite_types.go) file in the `api/v1` directory.
