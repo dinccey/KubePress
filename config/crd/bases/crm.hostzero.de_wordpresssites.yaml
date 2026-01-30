@@ -84,6 +84,11 @@ spec:
               ingress:
                 description: Optional Ingress configuration
                 properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the ingress resource
+                    type: object
                   disabled:
                     default: false
                     description: |-
@@ -93,6 +98,12 @@ spec:
                   host:
                     description: Hostname for the WordPress site
                     minLength: 1
+                    type: string
+                  ingressClassName:
+                    default: nginx
+                    description: |-
+                      IngressClassName specifies the IngressClass to use for the ingress
+                      Examples: "nginx", "traefik", "istio"
                     type: string
                   tls:
                     default: false

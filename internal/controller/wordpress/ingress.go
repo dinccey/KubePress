@@ -32,6 +32,9 @@ func ReconcileIngress(ctx context.Context, r client.Client, scheme *runtime.Sche
 	path := "/"
 	pathType := networkingv1.PathTypePrefix
 	ingressClassName := "nginx"
+	if wp.Spec.Ingress != nil && wp.Spec.Ingress.IngressClassName != "" {
+		ingressClassName = wp.Spec.Ingress.IngressClassName
+	}
 	secretName := GetTLSSecretName(wp.Name)
 
 	// Check if ingress exists
@@ -68,16 +71,24 @@ func createIngress(ctx context.Context, r client.Client, scheme *runtime.Scheme,
 	}
 
 	// Create ingress with basic settings
+	annotations := map[string]string{
+		"nginx.ingress.kubernetes.io/proxy-body-size":    wp.Spec.WordPress.MaxUploadLimit,
+		"nginx.ingress.kubernetes.io/proxy-read-timeout": "100",
+		"nginx.ingress.kubernetes.io/proxy-send-timeout": "100",
+	}
+	// Merge custom annotations
+	if wp.Spec.Ingress != nil && wp.Spec.Ingress.Annotations != nil {
+		for key, val := range wp.Spec.Ingress.Annotations {
+			annotations[key] = val
+		}
+	}
+
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ingressName,
-			Namespace: wp.Namespace,
-			Labels:    labels,
-			Annotations: map[string]string{
-				"nginx.ingress.kubernetes.io/proxy-body-size":    wp.Spec.WordPress.MaxUploadLimit,
-				"nginx.ingress.kubernetes.io/proxy-read-timeout": "100",
-				"nginx.ingress.kubernetes.io/proxy-send-timeout": "100",
-			},
+			Name:        ingressName,
+			Namespace:   wp.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &ingressClassName,
@@ -124,18 +135,35 @@ func updateExistingIngress(ctx context.Context, r client.Client, wp *crmv1.WordP
 		needsUpdate = true
 	}
 
-	// update max upload limit annotation if needed
+	// Update annotations - merge default and custom annotations
 	maxUploadLimit := wp.Spec.WordPress.MaxUploadLimit
 	if maxUploadLimit == "" {
 		maxUploadLimit = "64M" // default value if not set
 	}
 
-	if ingress.Annotations == nil {
-		ingress.Annotations = make(map[string]string)
+	expectedAnnotations := map[string]string{
+		"nginx.ingress.kubernetes.io/proxy-body-size":    maxUploadLimit,
+		"nginx.ingress.kubernetes.io/proxy-read-timeout": "100",
+		"nginx.ingress.kubernetes.io/proxy-send-timeout": "100",
+	}
+	// Merge custom annotations
+	if wp.Spec.Ingress != nil && wp.Spec.Ingress.Annotations != nil {
+		for key, val := range wp.Spec.Ingress.Annotations {
+			expectedAnnotations[key] = val
+		}
+	}
+	if !mapsEqual(ingress.Annotations, expectedAnnotations) {
+		ingress.Annotations = expectedAnnotations
+		needsUpdate = true
 	}
 
-	if ingress.Annotations["nginx.ingress.kubernetes.io/proxy-body-size"] != maxUploadLimit {
-		ingress.Annotations["nginx.ingress.kubernetes.io/proxy-body-size"] = maxUploadLimit
+	// Update ingressClassName if needed
+	ingressClassName := "nginx"
+	if wp.Spec.Ingress != nil && wp.Spec.Ingress.IngressClassName != "" {
+		ingressClassName = wp.Spec.Ingress.IngressClassName
+	}
+	if ingress.Spec.IngressClassName == nil || *ingress.Spec.IngressClassName != ingressClassName {
+		ingress.Spec.IngressClassName = &ingressClassName
 		needsUpdate = true
 	}
 

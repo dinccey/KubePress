@@ -122,4 +122,75 @@ When `ingress.disabled` is set to `true`:
 
 **Note:** Even when ingress is disabled, you still need to provide the `ingress.host` field as it may be used for other purposes within the operator.
 
+### Custom Ingress Controller and Annotations
+
+By default, KubePress creates Ingress resources for the NGINX controller. You can customize this by specifying a different IngressClass and adding custom annotations.
+
+#### Using a Different Ingress Controller
+
+To use a different ingress controller (e.g., Traefik, Istio), specify the `ingressClassName`:
+
+```yaml
+apiVersion: crm.hostzero.de/v1
+kind: WordPressSite
+metadata:
+  name: wordpress-traefik
+spec:
+  # ... other fields ...
+  ingress:
+    host: wordpress.example.com
+    tls: false
+    ingressClassName: traefik  # Use Traefik instead of NGINX
+```
+
+#### Adding Custom Annotations
+
+You can add custom annotations to the Ingress resource for controller-specific configurations. Custom annotations are merged with the default NGINX annotations:
+
+```yaml
+apiVersion: crm.hostzero.de/v1
+kind: WordPressSite
+metadata:
+  name: wordpress-custom
+spec:
+  # ... other fields ...
+  ingress:
+    host: wordpress.example.com
+    tls: false
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+```
+
+#### Traefik-Specific Example
+
+When using Traefik, you can configure it with custom annotations:
+
+```yaml
+apiVersion: crm.hostzero.de/v1
+kind: WordPressSite
+metadata:
+  name: wordpress-traefik-secure
+spec:
+  siteTitle: My WordPress Site
+  adminEmail: admin@example.com
+  adminUserSecretKeyRef: wordpress-secret
+  database:
+    createNew: true
+  wordpress:
+    image: wordpress:latest
+    storageSize: 10Gi
+  ingress:
+    host: wp.example.com
+    tls: true
+    ingressClassName: traefik
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+      traefik.ingress.kubernetes.io/router.middlewares: "security@kubecontext"
+```
+
+**Note:** The default NGINX annotations for body size and timeout limits are always applied. Custom annotations are merged with these defaults and can override them if needed.
+
 For more information about the fields in the WordPress Custom Resource, please look directly at the [wordpresssite_types.go](../api/v1/wordpresssite_types.go) file in the `api/v1` directory.

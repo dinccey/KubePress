@@ -120,6 +120,17 @@ type IngressConfig struct {
 	// +optional
 	TLS bool `json:"tls,omitempty"`
 
+	// IngressClassName specifies the IngressClass to use for the ingress
+	// Examples: "nginx", "traefik", "istio"
+	// +kubebuilder:default="nginx"
+	// +optional
+	IngressClassName string `json:"ingressClassName,omitempty"`
+
+	// Annotations to add to the ingress resource
+	// Useful for controller-specific configurations
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
 	// Disable automatic ingress creation
 	// When set to true, no ingress resource will be created
 	// +kubebuilder:default=false
