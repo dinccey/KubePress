@@ -49,6 +49,28 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 	serviceName := "phpmyadmin"
 	ingressName := "phpmyadmin"
 
+	// If the WordPressSite explicitly disables phpMyAdmin, ensure the global
+	// phpMyAdmin Ingress is removed for this site's namespace (operator must
+	// still respect cluster-wide PHPMYADMIN_ENABLED). We only delete the
+	// Ingress here; Deployment/Service remain managed globally.
+	if wp.Spec.DisablePhpMyAdmin {
+		logger.Info("WordPressSite requests phpMyAdmin disabled; ensuring ingress is deleted", "site", wp.Name)
+		ing := &networkingv1.Ingress{}
+		if err := r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: targetNS}, ing); err == nil {
+			if err := r.Delete(ctx, ing); err != nil {
+				logger.Error(err, "failed to delete phpMyAdmin ingress")
+				return err
+			}
+			logger.Info("deleted phpMyAdmin ingress", "namespace", targetNS)
+		} else if !kerrors.IsNotFound(err) {
+			logger.Error(err, "failed to query phpMyAdmin ingress for deletion")
+			return err
+		}
+
+		// Nothing more to do for this site
+		return nil
+	}
+
 	// --- Deployment ---
 	dep := &appsv1.Deployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: deploymentName, Namespace: targetNS}, dep); err != nil {
