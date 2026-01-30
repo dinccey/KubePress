@@ -96,31 +96,26 @@ spec:
     storageSize: 10Gi
 ```
 
-### Disabling Automatic Ingress Creation
+### Disabling TLS for Ingress
 
-By default, KubePress automatically creates an Ingress resource for your WordPress site. However, you can disable this behavior if you want to manage the Ingress manually or use a different ingress configuration.
-
-To disable automatic ingress creation, set the `ingress.disabled` field to `true`:
+If you're using Cloudflare Argo Tunnel or another reverse proxy that handles TLS termination, you should disable TLS on the Kubernetes ingress to avoid certificate conflicts. Simply set the `ingress.tls` field to `false`:
 
 ```yaml
 apiVersion: crm.hostzero.de/v1
 kind: WordPressSite
 metadata:
-  name: wordpress-no-ingress
+  name: wordpress-tunnel
 spec:
   # ... other fields ...
   ingress:
-    host: example.com
-    tls: false
-    disabled: true  # This prevents automatic ingress creation
+    host: wordpress.example.com
+    tls: false  # Disable TLS for external termination (e.g., Cloudflare Argo Tunnel)
 ```
 
-When `ingress.disabled` is set to `true`:
-- No Ingress resource will be created by the operator
-- If an Ingress was previously created by the operator, it will be deleted
-- You can manually create your own Ingress resource or use an alternative ingress solution
-
-**Note:** Even when ingress is disabled, you still need to provide the `ingress.host` field as it may be used for other purposes within the operator.
+When `tls` is set to `false`:
+- No TLS configuration will be added to the ingress
+- The ingress will serve HTTP traffic only
+- External services like Cloudflare Argo Tunnel can handle TLS termination
 
 ### Custom Ingress Controller and Annotations
 
@@ -191,7 +186,18 @@ spec:
       traefik.ingress.kubernetes.io/router.middlewares: "security@kubecontext"
 ```
 
-**Note:** The default NGINX annotations for body size and timeout limits are always applied. Custom annotations are merged with these defaults and can override them if needed.
+### Accessing phpMyAdmin
+
+When phpMyAdmin is enabled (which is the default), you can access it at the configured domain (set via `PHPMYADMIN_DOMAIN` environment variable). To log in:
+
+1. Use the database credentials from your WordPress secret:
+   - **Username**: The value of `databaseUsername` field in the secret
+   - **Password**: The value of `databasePassword` field in the secret
+   - **Server**: The MariaDB cluster host (automatically configured)
+
+2. Select your WordPress database from the left sidebar to manage tables, run queries, etc.
+
+**Note**: phpMyAdmin is configured to connect to the MariaDB cluster automatically. The login credentials are the database user credentials created for your WordPress site.
 
 ### Disabling Automatic phpMyAdmin Deployment
 

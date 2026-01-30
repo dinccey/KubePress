@@ -122,6 +122,7 @@ type IngressConfig struct {
 	Host string `json:"host"`
 
 	// Enable TLS/HTTPS
+	// Set to false for Cloudflare Argo Tunnel or other external TLS termination
 	// +kubebuilder:default=false
 	// +optional
 	TLS bool `json:"tls,omitempty"`
@@ -152,6 +153,14 @@ type WordPressSiteStatus struct {
 	// Ready indicates whether the WordPress site is operational
 	// +optional
 	Ready bool `json:"ready"`
+
+	// URL is the site URL
+	// +optional
+	URL string `json:"url,omitempty"`
+
+	// DatabaseStatus indicates the database status
+	// +optional
+	DatabaseStatus string `json:"databaseStatus,omitempty"`
 
 	// DeploymentStatus tracks the WordPress deployment status
 	DeploymentStatus string `json:"deploymentStatus,omitempty"`

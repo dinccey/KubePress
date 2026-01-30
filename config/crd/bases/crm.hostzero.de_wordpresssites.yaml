@@ -106,7 +106,9 @@ spec:
                     type: string
                   tls:
                     default: false
-                    description: Enable TLS/HTTPS
+                    description: |-
+                      Enable TLS/HTTPS
+                      Set to false for Cloudflare Argo Tunnel or other external TLS termination
                     type: boolean
                 required:
                 - host
@@ -269,6 +271,12 @@ spec:
               ready:
                 description: Ready indicates whether the WordPress site is operational
                 type: boolean
+              url:
+                description: URL is the site URL
+                type: string
+              databaseStatus:
+                description: DatabaseStatus indicates the database status
+                type: string
             type: object
         required:
         - spec

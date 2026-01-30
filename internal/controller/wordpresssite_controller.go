@@ -142,6 +142,16 @@ func (r *WordPressSiteReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Validate immutable fields - check if they changed since creation
+	// We can check this by comparing with the current spec
+	// Note: This is a basic check; in production you might want to store original values in status or annotations
+	if wp.Status.DeploymentStatus != "" && wp.Status.DeploymentStatus != StatusUnknown {
+		// Site is already created, check for immutable field changes
+		// For now, we'll just log warnings since the comments say "changing has no effect"
+		// But the init container will use the current spec values anyway
+		logger.V(1).Info("Note: siteTitle and adminEmail changes after creation have no effect on existing WordPress installation")
+	}
+
 	// Initialize status if needed
 	if wp.Status.Conditions == nil {
 		wp.Status.Conditions = []metav1.Condition{}
@@ -483,6 +493,22 @@ func (r *WordPressSiteReconciler) updateStatus(ctx context.Context, wp *crmv1.Wo
 	wp.Status.DeploymentStatus = status
 	wp.Status.Ready = status == StatusWordPressReadyAndDeployed
 	wp.Status.LastReconcileTime = &metav1.Time{Time: time.Now()}
+
+	// Set URL from ingress host
+	if wp.Spec.Ingress != nil && wp.Spec.Ingress.Host != "" {
+		protocol := "http"
+		if wp.Spec.Ingress.TLS {
+			protocol = "https"
+		}
+		wp.Status.URL = fmt.Sprintf("%s://%s", protocol, wp.Spec.Ingress.Host)
+	}
+
+	// Set database status
+	if wp.Spec.Database.CreateNew {
+		wp.Status.DatabaseStatus = "Managed"
+	} else {
+		wp.Status.DatabaseStatus = "External"
+	}
 
 	// Update the status
 	err := r.Status().Update(ctx, wp)

@@ -197,6 +197,10 @@ func updateExistingIngress(ctx context.Context, r client.Client, wp *crmv1.WordP
 		if tlsChanged {
 			needsUpdate = true
 		}
+	} else if (wp.Spec.Ingress == nil || !wp.Spec.Ingress.TLS) && len(ingress.Spec.TLS) > 0 {
+		// Remove TLS if it should be disabled
+		ingress.Spec.TLS = nil
+		needsUpdate = true
 	}
 
 	// Update the ingress if needed
