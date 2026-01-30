@@ -1,9 +1,123 @@
-{{- if false }}
-{{- /* CRD moved to dist/chart/crds/ to avoid Helm upgrade conflicts. */ -}}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: wordpresssites.crm.hostzero.de
+spec:
+  group: crm.hostzero.de
+  names:
+    kind: WordPressSite
+    listKind: WordPressSiteList
+    plural: wordpresssites
+    singular: wordpresssite
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Site URL
+      jsonPath: .status.url
+      name: URL
+      type: string
+    - description: Site status
+      jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - description: Database status
+      jsonPath: .status.databaseStatus
+      name: Database
+      type: string
+    - description: Deployment status
+      jsonPath: .status.deploymentStatus
+      name: Deployment
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: WordPressSite is the Schema for the wordpresssites API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WordPressSiteSpec defines the desired state of a WordPress
+              site
+            properties:
+              adminEmail:
+                description: |-
+                  Admin email
+                  Changing this after creation has no effect
+                pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+                type: string
+              adminUserSecretKeyRef:
+                description: |-
+                  Admin user secret key ref
+                  needs to be the name of a secret,
+                  secret needs a username and password field
+                type: string
+              database:
+                description: Database configuration
+                properties:
+                  createNew:
+                    default: true
+                    description: Whether to create a new database or use existing
+                      one
+                    type: boolean
+                type: object
+              ingress:
+                description: Optional Ingress configuration
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the ingress resource
+                    type: object
+                  disabled:
+                    default: false
+                    description: |-
+                      Disable automatic ingress creation
+                      When set to true, no ingress resource will be created
+                    type: boolean
+                  host:
+                    description: Hostname for the WordPress site
+                    minLength: 1
+                    type: string
+                  ingressClassName:
+                    default: nginx
+                    description: |-
+                      IngressClassName specifies the IngressClass to use for the ingress
+                      Examples: "nginx", "traefik", "istio"
+                    type: string
+                  tls:
+                    default: false
+                    description: Enable TLS/HTTPS
                     type: boolean
                 required:
                 - host
                 type: object
+              disablePhpMyAdmin:
+                default: false
+                description: |-
+                  Disable automatic phpMyAdmin deployment
+                  When set to true, no phpMyAdmin resource will be created for this site
+                type: boolean
               siteTitle:
                 description: |-
                   Site title for WordPress installation
@@ -131,7 +245,7 @@
                     type:
                       description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
-                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*)/?:(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
                   required:
                   - lastTransitionTime
@@ -163,4 +277,3 @@
     storage: true
     subresources:
       status: {}
-{{- end -}}
