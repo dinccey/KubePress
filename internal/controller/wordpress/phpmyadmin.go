@@ -112,48 +112,86 @@ func ReconcilePHPMyAdmin(ctx context.Context, r client.Client, wp *crmv1.WordPre
 
 		// --- Add Ingress definition ---
 		ingressName := "phpmyadmin"
+		// Prefer explicit phpMyAdmin ingress settings from the CR; fall back to
+		// the legacy PHPMYADMIN_DOMAIN env var for backward compatibility.
 		host := os.Getenv("PHPMYADMIN_DOMAIN")
+		var ingressClassName string
+		var annotations map[string]string
+		tlsEnabled := false
+		if wp.Spec.PhpMyAdminIngress != nil {
+			if wp.Spec.PhpMyAdminIngress.Host != "" {
+				host = wp.Spec.PhpMyAdminIngress.Host
+			}
+			if wp.Spec.PhpMyAdminIngress.IngressClassName != "" {
+				ingressClassName = wp.Spec.PhpMyAdminIngress.IngressClassName
+			}
+			if wp.Spec.PhpMyAdminIngress.Annotations != nil {
+				annotations = make(map[string]string)
+				for k, v := range wp.Spec.PhpMyAdminIngress.Annotations {
+					annotations[k] = v
+				}
+			}
+			tlsEnabled = wp.Spec.PhpMyAdminIngress.TLS
+		}
+
 		ingressLabels := map[string]string{
 			"app.kubernetes.io/managed-by": "kubepress-operator",
 			"app.kubernetes.io/part-of":    "kubepress",
 			"app.kubernetes.io/name":       "phpmyadmin-ingress",
 		}
-		ingressClassName := "nginx"
+		// Prepare annotations: start with defaults for the chosen class, then
+		// overlay any user-provided annotations so they take precedence.
+		expectedAnnotations := map[string]string{}
+		if ingressClassName == "nginx" {
+			expectedAnnotations["nginx.ingress.kubernetes.io/proxy-body-size"] = "32M"
+			expectedAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"] = "100"
+			expectedAnnotations["nginx.ingress.kubernetes.io/proxy-send-timeout"] = "100"
+		}
+		// overlay user annotations
+		if annotations != nil {
+			for k, v := range annotations {
+				expectedAnnotations[k] = v
+			}
+		}
+
 		ingress := &networkingv1.Ingress{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        ingressName,
 				Namespace:   wp.Namespace,
 				Labels:      ingressLabels,
-				Annotations: map[string]string{},
+				Annotations: expectedAnnotations,
 			},
-			Spec: networkingv1.IngressSpec{
-				IngressClassName: &ingressClassName,
-				Rules: []networkingv1.IngressRule{{
-					Host: host,
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{{
-								Path:     "/",
-								PathType: func() *networkingv1.PathType { pt := networkingv1.PathTypePrefix; return &pt }(),
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: serviceName,
-										Port: networkingv1.ServiceBackendPort{Number: 80},
-									},
-								},
-							},
+		}
+		// Only set class when explicitly provided
+		if ingressClassName != "" {
+			ingress.Spec.IngressClassName = &ingressClassName
+		}
+		ingress.Spec.Rules = []networkingv1.IngressRule{{
+			Host: host,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{{
+						Path:     "/",
+						PathType: func() *networkingv1.PathType { pt := networkingv1.PathTypePrefix; return &pt }(),
+						Backend: networkingv1.IngressBackend{
+							Service: &networkingv1.IngressServiceBackend{
+								Name: serviceName,
+								Port: networkingv1.ServiceBackendPort{Number: 80},
 							},
 						},
 					}},
 				},
 			},
-		}
+		}}
 
-		if tlsIssuer := os.Getenv("TLS_CLUSTER_ISSUER"); tlsIssuer != "" {
-			ingress.Annotations["cert-manager.io/cluster-issuer"] = tlsIssuer
+		// Configure TLS when requested by the CR or when a cluster issuer is configured.
+		if tlsEnabled || os.Getenv("TLS_CLUSTER_ISSUER") != "" {
+			if issuer := os.Getenv("TLS_CLUSTER_ISSUER"); issuer != "" {
+				ingress.Annotations["cert-manager.io/cluster-issuer"] = issuer
+			}
 			ingress.Spec.TLS = []networkingv1.IngressTLS{{
 				Hosts:      []string{host},
-				SecretName: serviceName + "-tls", // or customize as needed
+				SecretName: GetTLSSecretName(wp.Name),
 			}}
 		}
 

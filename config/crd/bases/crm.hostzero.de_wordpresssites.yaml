@@ -117,6 +117,28 @@ spec:
                   Disable automatic phpMyAdmin deployment
                   When set to true, no phpMyAdmin resource will be created for this site
                 type: boolean
+              phpMyAdminIngress:
+                description: phpMyAdmin ingress configuration
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to add to the phpMyAdmin ingress resource
+                    type: object
+                  host:
+                    description: Hostname for the phpMyAdmin site
+                    minLength: 1
+                    type: string
+                  ingressClassName:
+                    description: |-
+                      IngressClassName specifies the IngressClass to use for the phpMyAdmin ingress
+                      Examples: "nginx", "traefik", "istio"
+                    type: string
+                  tls:
+                    default: false
+                    description: Enable TLS/HTTPS for phpMyAdmin
+                    type: boolean
+                type: object
               siteTitle:
                 description: |-
                   Site title for WordPress installation
