@@ -100,7 +100,6 @@ spec:
                     minLength: 1
                     type: string
                   ingressClassName:
-                    default: nginx
                     description: |-
                       IngressClassName specifies the IngressClass to use for the ingress
                       Examples: "nginx", "traefik", "istio"

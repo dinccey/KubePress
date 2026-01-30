@@ -31,7 +31,10 @@ func ReconcileIngress(ctx context.Context, r client.Client, scheme *runtime.Sche
 	serviceName := GetResourceName(wp.Name)
 	path := "/"
 	pathType := networkingv1.PathTypePrefix
-	ingressClassName := "nginx"
+	// Do not assume a default ingress class here. If the user provided
+	// one, use it; otherwise leave it empty so the cluster's IngressClass
+	// selection or controller defaults are respected.
+	ingressClassName := ""
 	if wp.Spec.Ingress != nil && wp.Spec.Ingress.IngressClassName != "" {
 		ingressClassName = wp.Spec.Ingress.IngressClassName
 	}
@@ -70,11 +73,13 @@ func createIngress(ctx context.Context, r client.Client, scheme *runtime.Scheme,
 		maxUploadLimit = "64M" // default value if not set
 	}
 
-	// Create ingress with basic settings
-	annotations := map[string]string{
-		"nginx.ingress.kubernetes.io/proxy-body-size":    wp.Spec.WordPress.MaxUploadLimit,
-		"nginx.ingress.kubernetes.io/proxy-read-timeout": "100",
-		"nginx.ingress.kubernetes.io/proxy-send-timeout": "100",
+	// Create ingress with basic settings. Only apply controller-specific
+	// default annotations when the ingress class is explicitly nginx.
+	annotations := map[string]string{}
+	if ingressClassName == "nginx" {
+		annotations["nginx.ingress.kubernetes.io/proxy-body-size"] = wp.Spec.WordPress.MaxUploadLimit
+		annotations["nginx.ingress.kubernetes.io/proxy-read-timeout"] = "100"
+		annotations["nginx.ingress.kubernetes.io/proxy-send-timeout"] = "100"
 	}
 	// Merge custom annotations
 	if wp.Spec.Ingress != nil && wp.Spec.Ingress.Annotations != nil {
@@ -90,9 +95,10 @@ func createIngress(ctx context.Context, r client.Client, scheme *runtime.Scheme,
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: &ingressClassName,
-		},
+	}
+	// Only set IngressClassName explicitly if a value was provided.
+	if ingressClassName != "" {
+		ingress.Spec.IngressClassName = &ingressClassName
 	}
 
 	// Configure ingress rules
@@ -141,12 +147,19 @@ func updateExistingIngress(ctx context.Context, r client.Client, wp *crmv1.WordP
 		maxUploadLimit = "64M" // default value if not set
 	}
 
-	expectedAnnotations := map[string]string{
-		"nginx.ingress.kubernetes.io/proxy-body-size":    maxUploadLimit,
-		"nginx.ingress.kubernetes.io/proxy-read-timeout": "100",
-		"nginx.ingress.kubernetes.io/proxy-send-timeout": "100",
+	// Only apply nginx annotations by default when the ingress class is nginx.
+	expectedAnnotations := map[string]string{}
+	// Determine desired ingress class from the spec (same logic as above)
+	desiredClass := ""
+	if wp.Spec.Ingress != nil && wp.Spec.Ingress.IngressClassName != "" {
+		desiredClass = wp.Spec.Ingress.IngressClassName
 	}
-	// Merge custom annotations
+	if desiredClass == "nginx" {
+		expectedAnnotations["nginx.ingress.kubernetes.io/proxy-body-size"] = maxUploadLimit
+		expectedAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"] = "100"
+		expectedAnnotations["nginx.ingress.kubernetes.io/proxy-send-timeout"] = "100"
+	}
+	// Merge custom annotations from the CR (they override defaults)
 	if wp.Spec.Ingress != nil && wp.Spec.Ingress.Annotations != nil {
 		for key, val := range wp.Spec.Ingress.Annotations {
 			expectedAnnotations[key] = val
@@ -157,14 +170,18 @@ func updateExistingIngress(ctx context.Context, r client.Client, wp *crmv1.WordP
 		needsUpdate = true
 	}
 
-	// Update ingressClassName if needed
-	ingressClassName := "nginx"
+	// Update ingressClassName if a desired class is specified in the CR.
+	// If the CR does not specify a class, leave the existing ingress class
+	// untouched so we don't overwrite cluster/controller defaults.
+	desiredClass := ""
 	if wp.Spec.Ingress != nil && wp.Spec.Ingress.IngressClassName != "" {
-		ingressClassName = wp.Spec.Ingress.IngressClassName
+		desiredClass = wp.Spec.Ingress.IngressClassName
 	}
-	if ingress.Spec.IngressClassName == nil || *ingress.Spec.IngressClassName != ingressClassName {
-		ingress.Spec.IngressClassName = &ingressClassName
-		needsUpdate = true
+	if desiredClass != "" {
+		if ingress.Spec.IngressClassName == nil || *ingress.Spec.IngressClassName != desiredClass {
+			ingress.Spec.IngressClassName = &desiredClass
+			needsUpdate = true
+		}
 	}
 
 	// Update rules if needed
